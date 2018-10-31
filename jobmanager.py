@@ -1,6 +1,7 @@
 import numpy as np
 from pathlib import Path
 import h5py
+import click
 
 
 def config_dimensions(config):
