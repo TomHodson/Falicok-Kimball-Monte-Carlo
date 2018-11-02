@@ -202,17 +202,17 @@ def cython_mcmc(N_steps = 10**4,
 
     #python setup code goes here
     state = np.arange(N_system, dtype = np.int64) % 2
-    M = mc.interaction_matrix(N=N_system, alpha=alpha, V=V)
+    M = interaction_matrix(N=N_system, alpha=alpha, V=V)
 
     energies = np.zeros(shape = N_steps, dtype = np.float64)
     numbers = np.zeros(shape = N_steps, dtype = np.int64)
     magnetisations = np.zeros(shape = N_steps, dtype = np.int64)
 
-    alternating_signs, ut, t, background = mc.initialise_state_representations(state, interaction_matrix=M)
+    alternating_signs, ut, t, background = initialise_state_representations(state, interaction_matrix=M)
 
     #if sample_output is true, we just want to get the shape of the data
     if not sample_output:
-        mc.cython_mcmc_helper(
+        cython_mcmc_helper(
                     #outputs
                     energies,
                     numbers,
@@ -235,9 +235,7 @@ def cython_mcmc(N_steps = 10**4,
                     alpha,
                    )
 
-    if return_names == True:
-        return ('energies', 'numbers', 'magnetisations'), (energies, numbers, magnetisations)
-    return energies, numbers, magnetisations
+    return ('energies', 'numbers', 'magnetisations'), (energies, numbers, magnetisations)
 
 if __name__ == 'main':
     print('hello!')
