@@ -2,6 +2,8 @@ import numpy as np
 from pathlib import Path
 import h5py
 import click
+import time
+from montecarlo import cython_mcmc
 
 
 def config_dimensions(config):
@@ -15,7 +17,7 @@ def total_jobs(config):
     names, vals, lens, dtypes = config_dimensions(config)
     return lens.prod()
 
-def get_config(job_number, configs):
+def get_config(job_id, configs):
     '''
     Take a job number and a config with multiple values and index into the cartesian product of configurations
     use the value 'loop_over' to decide which values get looped over
@@ -28,13 +30,13 @@ def get_config(job_number, configs):
     indices = []
     for key in configs['loop_over'][::-1]:
         values = configs[key]
-        job_number, i  = divmod(job_number, len(values))
+        job_id, i  = divmod(job_id, len(values))
         single_config[key] = values[i]
         indices.append(i)
 
     indices = tuple(indices[::-1])
 
-    single_config['job_number'] = job_number
+    single_config['job_id'] = job_id
     single_config['indices'] = indices
 
     return single_config
@@ -46,16 +48,16 @@ def setup_mcmc(mcmc_routine, config, working_dir = Path('./')):
     names, vals, lens, dtypes = config_dimensions(config)
     data_shape = tuple(np.append(lens, config['N_steps']))
 
-    first_config = get_config(job_number=0, configs=config)
+    first_config = get_config(job_id=0, configs=config)
     names, results = mcmc_routine(**first_config, sample_output = True)
 
     script = f'''
-#bash shebang?
+#!/usr/bin/env bash
 #PBS -lselect=1:ncpus=1:mem=1gb
 #PBS -lwalltime=24:00:00
 #PBS -J 1-{total_jobs(config)}
 
-module load stuff
+module load anaconda/personal
 
 python3 something $PBS_ARRAY_INDEX
     '''
@@ -70,20 +72,29 @@ python3 something $PBS_ARRAY_INDEX
             result_file.create_dataset(name, shape = data_shape, dtype = val.dtype)
         print(list(result_file.keys()))
 
-
-def run_mcmc(mcmc_routine, job_number, working_dir = Path('./'), overwrite = True):
+@click.command()
+@click.option('--job-id', default=1, help='which job to run')
+@click.option('--working-dir', default='./', help='where to look for the config files')
+def run_mcmc(job_id, working_dir = Path('./'), overwrite = True, mcmc_routine = cython_mcmc):
     '''
     Does the work that a single thread is expected to do.
     '''
+    working_dir = Path(working_dir)
     result_file = working_dir / "results.hdf5"
+    if not result_file.exists():
+        print('No result file found')
+        return
+
     with h5py.File(result_file, "r") as f:
         config = dict(f.attrs)
-        print(config)
 
-    this_config = get_config(job_number, config)
+    starttime = time.time()
+    this_config = get_config(job_id, config)
     names, results = mcmc_routine(**this_config)
+    runtime = time.time() - starttime
 
-    job_file = working_dir / 'jobs' / f"job_{job_number}.hdf5"
+    (working_dir / 'jobs').mkdir(exist_ok = True)
+    job_file = working_dir / 'jobs' / f"job_{job_id}.hdf5"
     if job_file.exists() and overwrite == False:
         return
 
@@ -91,6 +102,7 @@ def run_mcmc(mcmc_routine, job_number, working_dir = Path('./'), overwrite = Tru
         f.attrs.update(this_config)
         for name, result in zip(names, results):
             result_data = f.create_dataset(name, data=result)
+            result_data.attrs['runtime'] = runtime
 
 def gather_mcmc(working_dir, overwrite = True):
     result_filename = working_dir / "results.hdf5"
