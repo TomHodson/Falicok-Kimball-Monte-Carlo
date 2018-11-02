@@ -10,8 +10,8 @@ os.environ["LDSHARED"] = "icc -shared"
 extensions = [
     Extension("*", ["*.pyx"],
         include_dirs=[numpy.get_include()],
-        extra_compile_args = ['-ip', '-xhost', '-qopenmp'],
-        extra_link_args = ['–qopenmp'],
+        extra_compile_args = ['-ip_no_inlining', '-xhost', '-qopenmp'],
+        extra_link_args = [],
         libraries=[],
         library_dirs=[],
         ),
