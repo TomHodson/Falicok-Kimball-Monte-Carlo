@@ -117,3 +117,5 @@ python setup.py build_ext --inplace
 ```
 pip install --editable ./path/to/project
 ```
+
+Now having problems with the linker and undefined symbols, I probably need to include some stuff from  $INTEL_HOME though haven't figure out what yet
