@@ -57,9 +57,10 @@ def setup_mcmc(mcmc_routine, config, working_dir = Path('./')):
 #PBS -lwalltime=24:00:00
 #PBS -J 1-{total_jobs(config)}
 
-module load anaconda/personal
+module load intel-suite anaconda/personal
+conda activate idp
 
-python3 something $PBS_ARRAY_INDEX
+run_mcmc --job-id $PBS_ARRAY_INDEX --working-dir /rds/general/user/tch14/home/Falicok-Kimball-Monte-Carlo/test_run
     '''
 
     with open(working_dir / 'runscript.sh', 'w') as f:
