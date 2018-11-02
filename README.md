@@ -102,3 +102,18 @@ $$ Z = \sum_{\{ n^f_i \}} e^ {\beta H_{\text{c}}} Tr e^{-\beta H_{\text{nc}}} $$
 
 ### 30th October
 currently working on the setup_mcc, run_mcc, and gather_mcc functions
+
+### 2nd November
+- got everything working on my own machine
+- had to add a '-ip_no_inlining' compiler flag to get the intel compiler to work with cythonize
+- to buld the cython files use:
+
+```
+module load anaconda3/personal intel-suite
+python setup.py build_ext --inplace
+```
+
+- to install the package and enable the commands like run_mcmc use:
+```
+pip install --editable ./path/to/project
+```

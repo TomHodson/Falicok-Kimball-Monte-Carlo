@@ -15,7 +15,7 @@ extensions = [
 setup(
     name="Falicov Kimball Monte Carlo",
     py_modules=['jobmanager'],
-    ext_modules=cythonize(extensions, annotate=True),
+    ext_modules=cythonize(extensions, annotate=True, language_level=3),
     install_requires=['Click'],
     entry_points='''
         [console_scripts]
