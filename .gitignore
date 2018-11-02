@@ -2,6 +2,7 @@
 fk_env/*
 *.html
 *.hdf5
+montecarlo.c
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
