@@ -2,12 +2,18 @@ from distutils.core import setup, Extension
 from Cython.Build import cythonize
 import numpy
 
+import os
+
+os.environ["CC"] = "icc"
+os.environ["LDSHARED"] = "icc -shared"
+
 extensions = [
     Extension("*", ["*.pyx"],
         include_dirs=[numpy.get_include()],
-        extra_compile_args = ['-ip_no_inlining'], #required to disable ipo so that it will build with ICC
-        #libraries=[...],
-        #library_dirs=[...]
+        extra_compile_args = ['-ip', '-xhost', '-qopenmp'],
+        extra_link_args = ['–qopenmp'],
+        libraries=[],
+        library_dirs=[],
         ),
 
 ]
