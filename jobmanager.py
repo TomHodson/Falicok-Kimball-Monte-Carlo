@@ -60,7 +60,7 @@ def setup_mcmc(mcmc_routine, config, working_dir = Path('./'), overwrite = False
 #PBS -m abe
 #PBS -M tch14@imperial.ac.uk
 #PBS -j oe
-#PBS -o {working_dir.resolve()}/logs/$PBS_JOBID
+#PBS -o {working_dir.resolve()}/logs/$PBS_JOBID[$PBS_ARRAY_INDEX].output
 
 echo ------------------------------------------------------
 echo -n 'Job is running on node '; cat $PBS_NODEFILE
