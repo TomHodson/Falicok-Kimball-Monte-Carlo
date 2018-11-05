@@ -25,11 +25,11 @@ setup(
     install_requires=['Click'],
     entry_points='''
         [console_scripts]
-        run_mcmc=jobmanager:run_mcmc
+        run_mcmc=jobmanager:run_mcmc_command
     ''',
 )
 
 
 
 #command to build inplace is: python setup.py build_ext --inplace
-#command to install is: pip install . --editable
+#command to install is: pip install --editable .

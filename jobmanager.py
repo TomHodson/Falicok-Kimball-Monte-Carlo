@@ -4,6 +4,7 @@ import h5py
 import click
 import time
 from montecarlo import cython_mcmc
+import logging
 
 
 def config_dimensions(config):
@@ -41,92 +42,92 @@ def get_config(job_id, configs):
 
     return single_config
 
-def setup_mcmc(mcmc_routine, config, working_dir = Path('./'), overwrite = False):
-    working_dir.mkdir(parents=True, exist_ok=overwrite)
+def setup_mcmc(mcmc_routine, config, working_dir = Path('./')):
+    
+    working_dir.mkdir(parents=True, exist_ok=True)
     (working_dir / 'jobs').mkdir(parents=True, exist_ok=True)
+    (working_dir / 'logs').mkdir(parents=True, exist_ok=True)
+    
+    result_filename = working_dir / "results.hdf5"
+    N_jobs = total_jobs(config)
+    
+    if result_filename.exists():
+        #update the results file with the remaining jobs to be done
+        with h5py.File(result_filename, "r+") as result_file:
+            result_file.attrs['jobs_to_run'] = job_completion(working_dir)
+            N_jobs = len(result_file.attrs['jobs_to_run'])
+            print('results keys:', list(result_file.keys()))
+    else:
+        #create the results file and metadata from scratch
+        names, vals, lens, dtypes = config_dimensions(config)
+        data_shape = tuple(np.append(lens, config['N_steps']))
 
-    names, vals, lens, dtypes = config_dimensions(config)
-    data_shape = tuple(np.append(lens, config['N_steps']))
+        first_config = get_config(job_id=0, configs=config)
+        names, results = mcmc_routine(**first_config, sample_output = True)
 
-    first_config = get_config(job_id=0, configs=config)
-    names, results = mcmc_routine(**first_config, sample_output = True)
+        with h5py.File(result_filename, "w") as result_file:
+            result_file.attrs.update(config)
+            for name, val in zip(names, results):
+                result_file.create_dataset(name, shape = data_shape, dtype = val.dtype)
+        print(list(result_file.keys()))
 
-    script = f'''
-#!/usr/bin/env bash
-#PBS -N MCMC_simulation
-#PBS -lselect=1:ncpus=1:mem=1gb
-#PBS -lwalltime=24:00:00
-#PBS -J 1-{total_jobs(config)}
-#PBS -m abe
-#PBS -M tch14@imperial.ac.uk
-#PBS -j oe
-#PBS -o {working_dir.resolve()}/logs/$PBS_JOBID[$PBS_ARRAY_INDEX].output
-
-echo ------------------------------------------------------
-echo -n 'Job is running on node '; cat $PBS_NODEFILE
-echo ------------------------------------------------------
-echo PBS: qsub is running on $PBS_O_HOST
-echo PBS: originating queue is $PBS_O_QUEUE
-echo PBS: executing queue is $PBS_QUEUE
-echo PBS: working directory is $PBS_O_WORKDIR
-echo PBS: execution mode is $PBS_ENVIRONMENT
-echo PBS: job identifier is $PBS_JOBID
-echo PBS: job name is $PBS_JOBNAME
-echo PBS: node file is $PBS_NODEFILE
-echo PBS: current home directory is $PBS_O_HOME
-echo PBS: PATH = $PBS_O_PATH
-echo ------------------------------------------------------
-
-module load intel-suite anaconda3/personal
-. /home/tch14/anaconda3/etc/profile.d/conda.sh
-conda activate idp
-
-run_mcmc --job-id $PBS_ARRAY_INDEX --working-dir {working_dir.resolve()}
-    '''
-
+    #update or create the script because the number of jobs to do might have changed
+    script = open('./sample_runscript.sh').read().format(working_dir=working_dir.resolve(), N_jobs=N_jobs)
     with open(working_dir / 'runscript.sh', 'w') as f:
         f.write(script)
         print(script)
 
-    result_filename = working_dir / "results.hdf5"
-    with h5py.File(result_filename, "w") as result_file:
-        result_file.attrs.update(config)
-        for name, val in zip(names, results):
-            result_file.create_dataset(name, shape = data_shape, dtype = val.dtype)
-        print(list(result_file.keys()))
+    
+
 
 @click.command()
 @click.option('--job-id', default=1, help='which job to run')
 @click.option('--working-dir', default='./', help='where to look for the config files')
 @click.option('--temp-dir', default='./', help='where to store temporary files')
+def run_mcmc_command(*args, **kwargs):
+    return run_mcmc(*args, **kwargs)
+
 def run_mcmc(job_id, 
              working_dir = Path('./'),
              temp_dir = Path('./'),
-             overwrite = True, mcmc_routine = cython_mcmc):
+             overwrite = False, mcmc_routine = cython_mcmc):
     '''
     Does the work that a single thread is expected to do.
     '''
-    print(f'job_id == {job_id}')
+    job_id = job_id - 1 #PBS array jobs are 1 based.
+    
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+    logger.info(f'job_id: {job_id}')
     
     working_dir = Path(working_dir)
     result_file = working_dir / "results.hdf5"
     if not result_file.exists():
-        print('No result file found')
+        logger.info(f'No result file found')
+        return
+    
+    (working_dir / 'jobs').mkdir(exist_ok = True)
+    job_file = working_dir / 'jobs' / f"job_{job_id}.hdf5"
+    if job_file.exists() and overwrite == False:
+        logger.info(f'Job File already exists, not overwriting it')
         return
 
     with h5py.File(result_file, "r") as f:
         config = dict(f.attrs)
+        
+    if 'jobs_to_run' in config:
+        job_id = config['jobs_to_run'][job_id]
 
     starttime = time.time()
-    this_config = get_config(job_id-1, config)
+    this_config = get_config(job_id, config)
+    
+    logger.info(f'This jobs config is {this_config}')
+    logger.info(f'Starting MCMC routine')
     names, results = mcmc_routine(**this_config)
     runtime = time.time() - starttime
+    logger.info(f'MCMC routine finished after {runtime:.2f} seconds')
 
-    (working_dir / 'jobs').mkdir(exist_ok = True)
-    job_file = working_dir / 'jobs' / f"job_{job_id}.hdf5"
-    if job_file.exists() and overwrite == False:
-        return
-
+    logger.info(f'Copying the results into the h5py file')
     with h5py.File(job_file, "w") as f:
         f.attrs.update(this_config)
         f.attrs['runtime'] = runtime
@@ -147,8 +148,7 @@ def job_completion(working_dir):
             if not job_filename.exists():
                 missing.append(job_id)
                 
-        print(f'missing : {len(missing)} of {total_jobs(config)} total')
-        print(missing)
+        return np.array(missing)
             
 def gather_mcmc(working_dir, overwrite = True):
     result_filename = working_dir / "results.hdf5"
@@ -176,4 +176,5 @@ def gather_mcmc(working_dir, overwrite = True):
                         dim.label = name
 
                     dataset[indices] = val
-        print(f'missing : {missing} of {total_jobs(config)} total')
+    print(f'missing : {missing} of {total_jobs(config)} total')
+    print(f'File size: {result_filename.stat().st_size / 10**9}')
