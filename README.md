@@ -119,3 +119,51 @@ pip install --editable ./path/to/project
 ```
 
 Now having problems with the linker and undefined symbols, I probably need to include some stuff from  $INTEL_HOME though haven't figure out what yet
+
+ok I think the problem was that I wasn't using intel python, I'm now making a conda environment with intel python 3 in it called idp using the instructions from https://software.intel.com/en-us/articles/using-intel-distribution-for-python-with-anaconda
+
+to avoid adding intel as a channel i used:
+```
+conda create -c intel -n idp intelpython3_core python=3
+```
+
+I then manually added this env as a jupyter kernal as in https://stackoverflow.com/questions/39604271/conda-environments-not-showing-up-in-jupyter-notebook
+```
+python -m ipykernel install --user --name idp --display-name "Python3 (intel)"
+```
+
+a good reference for using ICC with cython https://software.intel.com/en-us/articles/thread-parallelism-in-cython
+
+Everything seems to work, though I think I need to figure out how to write the data back into the main file using mpi or something
+
+### 5th November
+I added some git aliases: https://git-scm.com/book/en/v2/Git-Basics-Git-Aliases
+```
+$ git config --global alias.co checkout
+$ git config --global alias.br branch
+$ git config --global alias.ci commit
+$ git config --global alias.st status
+```
+
+Ran a few thousand jobs, the first 1000 had 100 jobs fail, I need to check the error logs for those jobs and try to figure out if it's a specific machine that can't run my code, maybe it has a different architecture?
+
+The majority of the failed jobs ran on cx1-138-2-3.cx1.hpc.ic.ac.uk though the 2 and the 3 are different each time. The rest seem to have timed out for some reason.
+
+898 Job is running on node cx1-138-3-4.cx1.hpc.ic.ac.uk ['/var/spool/PBS/mom_priv/jobs/2124202[898].cx1.SC: line 29: 22713 Illegal instruction     run_mcmc --job-id $PBS_ARRAY_INDEX --working-dir /rds/general/user/tch14/home/Falicok-Kimball-Monte-Carlo/classical_run', '']
+899 Job is running on node cx1-138-3-4.cx1.hpc.ic.ac.uk ['/var/spool/PBS/mom_priv/jobs/2124202[899].cx1.SC: line 29: 22714 Illegal instruction     run_mcmc --job-id $PBS_ARRAY_INDEX --working-dir /rds/general/user/tch14/home/Falicok-Kimball-Monte-Carlo/classical_run', '']
+900 Job is running on node cx1-138-3-4.cx1.hpc.ic.ac.uk ['/var/spool/PBS/mom_priv/jobs/2124202[900].cx1.SC: line 29: 22715 Illegal instruction     run_mcmc --job-id $PBS_ARRAY_INDEX --working-dir /rds/general/user/tch14/home/Falicok-Kimball-Monte-Carlo/classical_run', '']
+901 Job is running on node cx1-138-4-1.cx1.hpc.ic.ac.uk ['/var/spool/PBS/mom_priv/jobs/2124202[901].cx1.SC: line 29: 29676 Illegal instruction     run_mcmc --job-id $PBS_ARRAY_INDEX --working-dir /rds/general/user/tch14/home/Falicok-Kimball-Monte-Carlo/classical_run', '']
+902 Job is running on node cx1-138-4-1.cx1.hpc.ic.ac.uk ['/var/spool/PBS/mom_priv/jobs/2124202[902].cx1.SC: line 29: 29678 Illegal instruction     run_mcmc --job-id $PBS_ARRAY_INDEX --working-dir /rds/general/user/tch14/home/Falicok-Kimball-Monte-Carlo/classical_run', '']
+903 Job is running on node cx1-138-4-1.cx1.hpc.ic.ac.uk ['/var/spool/PBS/mom_priv/jobs/2124202[903].cx1.SC: line 29: 29679 Illegal instruction     run_mcmc --job-id $PBS_ARRAY_INDEX --working-dir /rds/general/user/tch14/home/Falicok-Kimball-Monte-Carlo/classical_run', '']
+904 Job is running on node cx1-138-4-1.cx1.hpc.ic.ac.uk ['/var/spool/PBS/mom_priv/jobs/2124202[904].cx1.SC: line 29: 29680 Illegal instruction     run_mcmc --job-id $PBS_ARRAY_INDEX --working-dir /rds/general/user/tch14/home/Falicok-Kimball-Monte-Carlo/classical_run', '']
+905 Job is running on node cx1-138-4-4.cx1.hpc.ic.ac.uk ['/var/spool/PBS/mom_priv/jobs/2124202[905].cx1.SC: line 29: 10318 Illegal instruction     run_mcmc --job-id $PBS_ARRAY_INDEX --working-dir /rds/general/user/tch14/home/Falicok-Kimball-Monte-Carlo/classical_run', '']
+906 Job is running on node cx1-138-4-4.cx1.hpc.ic.ac.uk ['/var/spool/PBS/mom_priv/jobs/2124202[906].cx1.SC: line 29: 10320 Illegal instruction     run_mcmc --job-id $PBS_ARRAY_INDEX --working-dir /rds/general/user/tch14/home/Falicok-Kimball-Monte-Carlo/classical_run', '']
+907 Job is running on node cx1-138-4-4.cx1.hpc.ic.ac.uk ['/var/spool/PBS/mom_priv/jobs/2124202[907].cx1.SC: line 29: 10321 Illegal instruction     run_mcmc --job-id $PBS_ARRAY_INDEX --working-dir /rds/general/user/tch14/home/Falicok-Kimball-Monte-Carlo/classical_run', '']
+908 Job is running on node cx1-138-4-4.cx1.hpc.ic.ac.uk ['/var/spool/PBS/mom_priv/jobs/2124202[908].cx1.SC: line 29: 10322 Illegal instruction     run_mcmc --job-id $PBS_ARRAY_INDEX --working-dir /rds/general/user/tch14/home/Falicok-Kimball-Monte-Carlo/classical_run', '']
+909 Job is running on node cx1-138-6-4.cx1.hpc.ic.ac.uk ['/var/spool/PBS/mom_priv/jobs/2124202[909].cx1.SC: line 29: 27527 Illegal instruction     run_mcmc --job-id $PBS_ARRAY_INDEX --working-dir /rds/general/user/tch14/home/Falicok-Kimball-Monte-Carlo/classical_run', '']
+910 Job is running on node cx1-138-6-4.cx1.hpc.ic.ac.uk ['/var/spool/PBS/mom_priv/jobs/2124202[910].cx1.SC: line 29: 27526 Illegal instruction     run_mcmc --job-id $PBS_ARRAY_INDEX --working-dir /rds/general/user/tch14/home/Falicok-Kimball-Monte-Carlo/classical_run', '']
+
+Things to do:
+- write the quantum montecarlo code
+- write out the file to the tempdir 
+- change the jobs to save their state at intermediate intervals
