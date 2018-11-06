@@ -26,4 +26,4 @@ module load intel-suite anaconda3/personal
 conda activate idp
 
 cd {working_dir}
-run_mcmc --job-id $PBS_ARRAY_INDEX --temp-dir $TMPDIR --working-dir ./ >>logs/${{PBS_JOBID}}[${{PBS_ARRAY_INDEX}}].log 2>&1
+run_mcmc --job-id $PBS_ARRAY_INDEX --temp-dir $TMPDIR --working-dir ./

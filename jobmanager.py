@@ -6,6 +6,14 @@ import time
 from montecarlo import cython_mcmc
 import logging
 
+def read_config_file(working_dir):
+    result_filename = working_dir / "results.hdf5"
+    with h5py.File(result_filename, "r") as result_file:
+            #you have to conver the hdf5 reference to a python object before closing the file 
+            #othewise you get errors because hdf5py doesn't actually read any data until you ask
+            config = dict(result_file.attrs)
+    return config
+    
 
 def config_dimensions(config):
     names = config['loop_over']
@@ -106,17 +114,19 @@ def run_mcmc(job_id,
         logger.info(f'No result file found')
         return
     
+    with h5py.File(result_file, "r") as f:
+        config = dict(f.attrs)
+    logger.info(f'Loaded config')
+    
+    if 'jobs_to_run' in config:
+        job_id = config['jobs_to_run'][job_id]
+        logger.info(f'Looked up job_id and it mapped to job {job_id}')
+    
     (working_dir / 'jobs').mkdir(exist_ok = True)
     job_file = working_dir / 'jobs' / f"job_{job_id}.hdf5"
     if job_file.exists() and overwrite == False:
         logger.info(f'Job File already exists, not overwriting it')
         return
-
-    with h5py.File(result_file, "r") as f:
-        config = dict(f.attrs)
-        
-    if 'jobs_to_run' in config:
-        job_id = config['jobs_to_run'][job_id]
 
     starttime = time.time()
     this_config = get_config(job_id, config)
@@ -150,17 +160,29 @@ def job_completion(working_dir):
                 
         return np.array(missing)
             
-def gather_mcmc(working_dir, overwrite = True):
+def gather_mcmc(working_dir):
+    logger = logging.getLogger(__name__)
     result_filename = working_dir / "results.hdf5"
     job_dir =  working_dir / "jobs"
 
     missing = 0
     with h5py.File(result_filename, "r+") as result_file:
-        config = dict(result_file.attrs)
-
-        for job_id in range(1,total_jobs(config)+1):
+        config = result_file.attrs
+        if 'copied_in' not in config:
+            logger.info(f"copied_in wasn't in config, initialising it")
+            config['copied_in'] = np.zeros(total_jobs(config), dtype=np.int)
+        
+        jobs_to_copy = np.where(config['copied_in'] == 0)[0]
+        
+        logger.info(f'Config: {dict(config)}')
+        logger.info(f'Number of Jobs to copy in: {len(jobs_to_copy)}')
+        logger.info(f'Job IDs: {jobs_to_copy}...')
+        
+        for job_id in jobs_to_copy:
+            logger.info(f'Starting Job ID: {job_id}')
             job_filename = job_dir / f"job_{job_id}.hdf5"
             if not job_filename.exists():
+                logger.info(f"Job ID {job_id} results file doesn't exist")
                 missing += 1
                 continue
             
@@ -176,5 +198,10 @@ def gather_mcmc(working_dir, overwrite = True):
                         dim.label = name
 
                     dataset[indices] = val
-    print(f'missing : {missing} of {total_jobs(config)} total')
-    print(f'File size: {result_filename.stat().st_size / 10**9}')
+                
+                #indicate that this data has been copied into the result file sucessfully
+                config['copied_in'][job_id-1] = 1
+                result_file.flush()
+                
+        logger.info(f'missing : {missing} of {len(jobs_to_copy)} total jobs that need to be inserted (overall {total_jobs(config)})')
+        logger.info(f'File size: {result_filename.stat().st_size / 10**9}')
