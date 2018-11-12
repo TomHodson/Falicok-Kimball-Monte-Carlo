@@ -148,22 +148,22 @@ $ git config --global alias.st status
 Ran a few thousand jobs, the first 1000 had 100 jobs fail, I need to check the error logs for those jobs and try to figure out if it's a specific machine that can't run my code, maybe it has a different architecture?
 
 The majority of the failed jobs ran on cx1-138-2-3.cx1.hpc.ic.ac.uk though the 2 and the 3 are different each time. The rest seem to have timed out for some reason.
-
-898 Job is running on node cx1-138-3-4.cx1.hpc.ic.ac.uk ['/var/spool/PBS/mom_priv/jobs/2124202[898].cx1.SC: line 29: 22713 Illegal instruction     run_mcmc --job-id $PBS_ARRAY_INDEX --working-dir /rds/general/user/tch14/home/Falicok-Kimball-Monte-Carlo/classical_run', '']
-899 Job is running on node cx1-138-3-4.cx1.hpc.ic.ac.uk ['/var/spool/PBS/mom_priv/jobs/2124202[899].cx1.SC: line 29: 22714 Illegal instruction     run_mcmc --job-id $PBS_ARRAY_INDEX --working-dir /rds/general/user/tch14/home/Falicok-Kimball-Monte-Carlo/classical_run', '']
-900 Job is running on node cx1-138-3-4.cx1.hpc.ic.ac.uk ['/var/spool/PBS/mom_priv/jobs/2124202[900].cx1.SC: line 29: 22715 Illegal instruction     run_mcmc --job-id $PBS_ARRAY_INDEX --working-dir /rds/general/user/tch14/home/Falicok-Kimball-Monte-Carlo/classical_run', '']
-901 Job is running on node cx1-138-4-1.cx1.hpc.ic.ac.uk ['/var/spool/PBS/mom_priv/jobs/2124202[901].cx1.SC: line 29: 29676 Illegal instruction     run_mcmc --job-id $PBS_ARRAY_INDEX --working-dir /rds/general/user/tch14/home/Falicok-Kimball-Monte-Carlo/classical_run', '']
-902 Job is running on node cx1-138-4-1.cx1.hpc.ic.ac.uk ['/var/spool/PBS/mom_priv/jobs/2124202[902].cx1.SC: line 29: 29678 Illegal instruction     run_mcmc --job-id $PBS_ARRAY_INDEX --working-dir /rds/general/user/tch14/home/Falicok-Kimball-Monte-Carlo/classical_run', '']
-903 Job is running on node cx1-138-4-1.cx1.hpc.ic.ac.uk ['/var/spool/PBS/mom_priv/jobs/2124202[903].cx1.SC: line 29: 29679 Illegal instruction     run_mcmc --job-id $PBS_ARRAY_INDEX --working-dir /rds/general/user/tch14/home/Falicok-Kimball-Monte-Carlo/classical_run', '']
-904 Job is running on node cx1-138-4-1.cx1.hpc.ic.ac.uk ['/var/spool/PBS/mom_priv/jobs/2124202[904].cx1.SC: line 29: 29680 Illegal instruction     run_mcmc --job-id $PBS_ARRAY_INDEX --working-dir /rds/general/user/tch14/home/Falicok-Kimball-Monte-Carlo/classical_run', '']
-905 Job is running on node cx1-138-4-4.cx1.hpc.ic.ac.uk ['/var/spool/PBS/mom_priv/jobs/2124202[905].cx1.SC: line 29: 10318 Illegal instruction     run_mcmc --job-id $PBS_ARRAY_INDEX --working-dir /rds/general/user/tch14/home/Falicok-Kimball-Monte-Carlo/classical_run', '']
-906 Job is running on node cx1-138-4-4.cx1.hpc.ic.ac.uk ['/var/spool/PBS/mom_priv/jobs/2124202[906].cx1.SC: line 29: 10320 Illegal instruction     run_mcmc --job-id $PBS_ARRAY_INDEX --working-dir /rds/general/user/tch14/home/Falicok-Kimball-Monte-Carlo/classical_run', '']
-907 Job is running on node cx1-138-4-4.cx1.hpc.ic.ac.uk ['/var/spool/PBS/mom_priv/jobs/2124202[907].cx1.SC: line 29: 10321 Illegal instruction     run_mcmc --job-id $PBS_ARRAY_INDEX --working-dir /rds/general/user/tch14/home/Falicok-Kimball-Monte-Carlo/classical_run', '']
-908 Job is running on node cx1-138-4-4.cx1.hpc.ic.ac.uk ['/var/spool/PBS/mom_priv/jobs/2124202[908].cx1.SC: line 29: 10322 Illegal instruction     run_mcmc --job-id $PBS_ARRAY_INDEX --working-dir /rds/general/user/tch14/home/Falicok-Kimball-Monte-Carlo/classical_run', '']
-909 Job is running on node cx1-138-6-4.cx1.hpc.ic.ac.uk ['/var/spool/PBS/mom_priv/jobs/2124202[909].cx1.SC: line 29: 27527 Illegal instruction     run_mcmc --job-id $PBS_ARRAY_INDEX --working-dir /rds/general/user/tch14/home/Falicok-Kimball-Monte-Carlo/classical_run', '']
-910 Job is running on node cx1-138-6-4.cx1.hpc.ic.ac.uk ['/var/spool/PBS/mom_priv/jobs/2124202[910].cx1.SC: line 29: 27526 Illegal instruction     run_mcmc --job-id $PBS_ARRAY_INDEX --working-dir /rds/general/user/tch14/home/Falicok-Kimball-Monte-Carlo/classical_run', '']
+EDIT: The jobs on 138 probably failed because of AVX instructions (add :avx=true)
 
 Things to do:
 - write the quantum montecarlo code
-- write out the file to the tempdir 
 - change the jobs to save their state at intermediate intervals
+
+
+Questions:
+- Can I mount the CX1 drive locally? What's the best way? smb://rds.imperial.ac.uk/RDS/user/tch14/
+- How can I redirect the error and output to a specific folder? read docs
+- can add :avx=true to get force only running on nodes that have avx
+- an alternative to click is docopt
+- use the imperial VPN
+
+
+### trying to get MKL into my cython script
+it may be that source $MKL_HOME/bin/mklvars.sh intel64 is a necessary step before compilation
+I then added params to setup.py from https://software.intel.com/en-us/articles/intel-mkl-link-line-advisor and it seemed to work
+next I need to try to run STEMR to see if it works

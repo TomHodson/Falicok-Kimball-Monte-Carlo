@@ -1,9 +1,11 @@
 #cython: boundscheck=False, wraparound=False, infer_types=True, initializedcheck=False, cdivision=True
 
+from wrapped_C_functions cimport diagonalise_scipy
+
 #pull in the random number generation code from the standard lib
-cdef extern from "stdlib.h":
-    double drand48() nogil
-    void srand48(long int seedval) nogil
+cdef extern from "stdlib.h" nogil:
+    double drand48()
+    void srand48(long int seedval)
 
 def py_drand48():
     return drand48()
@@ -14,6 +16,7 @@ def py_srand48(seed):
 cimport cython
 from libc.math cimport exp, log
 import numpy as np
+cimport numpy as np
 import scipy as sp
 from scipy import linalg
 
@@ -25,19 +28,19 @@ def interaction_matrix(N, alpha, V, normalise = True, dtype = np.float64):
     row0 = V * row0
     return linalg.circulant(row0)
 
-cpdef initialise_state_representations(long [::1] state, double [:, ::1] interaction_matrix):
+cpdef initialise_state_representations(double [::1] state, double [:, ::1] interaction_matrix):
     'initialise useful representations of the state'
     cdef int N = state.shape[0]
 
-    alternating_signs = np.ones(N, dtype = np.int64)
-    ut = np.ones(N, dtype = np.int64)
-    t = np.ones(N, dtype = np.int64)
+    alternating_signs = np.ones(N, dtype = np.double)
+    ut = np.ones(N, dtype = np.double)
+    t = np.ones(N, dtype = np.double)
 
 
-    cdef long [::1] alt_v = alternating_signs
-    cdef long [::1] ut_v = ut
-    cdef long[::1]  t_v = t
-    cdef long[::1] st_v = state
+    cdef double [::1] alt_v = alternating_signs
+    cdef double [::1] ut_v = ut
+    cdef double[::1]  t_v = t
+    cdef double[::1] st_v = state
 
 
     cdef int s = 1
@@ -53,8 +56,8 @@ cpdef initialise_state_representations(long [::1] state, double [:, ::1] interac
 
 cpdef double c_classical_energy(
                                     double mu,
-                                    long[::1] state,
-                                    long[::1] t,
+                                    double[::1] state,
+                                    double[::1] t,
                                     double [::1] background) nogil:
     'compute the energy of the f electrons'
     cdef int N = state.shape[0]
@@ -67,10 +70,10 @@ cpdef double c_classical_energy(
 
 cdef void invert_site_inplace(
                         long i,
-                        long [::1] alternating_signs,
-                        long [::1] state,
-                        long [::1] ut,
-                        long [::1] t,
+                        double [::1] alternating_signs,
+                        double [::1] state,
+                        double [::1] ut,
+                        double [::1] t,
                         double [::1] background,
                         double [:, ::1] interaction_matrix,
                        ) nogil:
@@ -82,8 +85,8 @@ cdef void invert_site_inplace(
     t[i] = -t[i]
 
     #these expresions only work if we're already flipped the spin
-    cdef long dni = ut[i]
-    cdef long dti = 2 * t[i]
+    cdef double dni = ut[i]
+    cdef double dti = 2 * t[i]
 
     cdef int j
     for j in range(N):
@@ -91,12 +94,12 @@ cdef void invert_site_inplace(
 
 cpdef double incremental_energy_difference(long i,
                                     double mu,
-                                    long[::1] ut,
-                                    long[::1] t,
+                                    double[::1] ut,
+                                    double[::1] t,
                                     double [::1] background) nogil:
     'compute the energy difference for the site i WHICH HAS BEEN FLIPPED ALREADY'
-    cdef long dni = ut[i] #the changes are simply related to the value after flipping too
-    cdef long dti = 2*t[i]
+    cdef double dni = ut[i] #the changes are simply related to the value after flipping too
+    cdef double dti = 2*t[i]
     cdef double dF_f =  - mu * dni + 2 * dti * background[i]
     return dF_f
 
@@ -109,31 +112,19 @@ cpdef double average_quantum_energy(double beta, double[::1] eigenvalues):
 
     return 1/beta * energy
 
-#cpdef diagonalise(state, double U, double [::1] eigenvalues, double complex [:, ::1] eigenvectors):
-#          N = state.shape[0]
-#          diagonal = U*state
-#          offdiagonal = -np.ones(len(diagonal)-1) #setting t=1 here
-#          eigenvalues[:], eigenvectors[:, :] = sp.linalg.eigh_tridiagonal(d = diagonal, e = offdiagonal)
-
-def diagonalise(state, U, eigenvalues, eigenvectors):
-          N = state.shape[0]
-          diagonal = U*state
-          offdiagonal = -np.ones(len(diagonal)-1) #setting t=1 here
-          eigenvalues[:], eigenvectors[:, :] = sp.linalg.eigh_tridiagonal(d = diagonal, e = offdiagonal)
-
 
 cpdef void quantum_cython_mcmc_helper(
                     #outputs
                     double [::1] classical_energies,
                     double [::1] quantum_energies,
-                    long [::1] numbers,
-                    long [::1] magnetisations,
+                    double [::1] numbers,
+                    double [::1] magnetisations,
 
                     #inputs
-                    long [::1] state,
-                    long [::1] alternating_signs,
-                    long [::1] ut,
-                    long [::1] t,
+                    double [::1] state,
+                    double [::1] alternating_signs,
+                    double [::1] ut,
+                    double [::1] t,
                     double [::1] background,
                     double [:, ::1] interaction_matrix,
 
@@ -146,18 +137,21 @@ cpdef void quantum_cython_mcmc_helper(
                     double alpha=1.5,
                     double U=1,
                    ):
-
+    
+      
       cdef double [::1] eigenvalues = np.zeros(N_system, dtype = np.double);
-      cdef double complex [:, ::1] eigenvectors = np.zeros((N_system, N_system), dtype = np.complex128);
+      cdef double [:, ::1] eigenvectors = np.zeros((N_system, N_system), dtype = np.double);
 
+      cdef double [::1] ts = -np.ones(N_system, dtype = np.double)
+        
       #diagonalise H and put the answers into eigenvalues and eigenvectors
-      diagonalise(state, U, eigenvalues, eigenvectors)
+      diagonalise_scipy(state, ts, eigenvalues, eigenvectors)
 
       #calculate the first entry in each array of output and make variables to track them
       cdef double classical_energy = c_classical_energy(mu, state, t, background)
       cdef double quantum_energy = average_quantum_energy(beta, eigenvalues)
-      cdef long number = np.sum(state)
-      cdef long magnetisation = np.sum(t)
+      cdef double number = np.sum(state)
+      cdef double magnetisation = np.sum(t)
 
       classical_energies[0] = classical_energy
       quantum_energies[0] = quantum_energy
@@ -169,8 +163,8 @@ cpdef void quantum_cython_mcmc_helper(
       #variables to track changes in the above until the move is either accepte or rejected
       cdef double quantum_dF #change in quantum free energy
       cdef double classical_dF #change in quantum free energy
-      cdef long dn #the change in the particle number, 0 or 1
-      cdef long dt # the change in the magnetisation at this site
+      cdef double dn #the change in the particle number, 0 or 1
+      cdef double dt # the change in the magnetisation at this site
 
       cdef long site #the site we're considering flipping
       cdef int i
@@ -180,8 +174,8 @@ cpdef void quantum_cython_mcmc_helper(
              #flip the site
              invert_site_inplace(site, alternating_signs, state, ut, t, background, interaction_matrix)
 
-             #diagonalise H
-             diagonalise(state, U, eigenvalues, eigenvectors)
+             #onalise H
+             diagonalise_scipy(state, ts, eigenvalues, eigenvectors)
 
              #calculate all the changes, quantum_dF is the only one that can't be done incrementally
              new_quantum_energy = average_quantum_energy(beta, eigenvalues)
@@ -221,12 +215,13 @@ def quantum_cython_mcmc(N_steps = 10**4,
                ):
 
     #python setup code goes here
-    state = np.arange(N_system, dtype = np.int64) % 2
+    state = np.arange(N_system, dtype = np.float64) % 2
     M = interaction_matrix(N=N_system, alpha=alpha, V=V)
 
-    energies = np.zeros(shape = N_steps, dtype = np.float64)
-    numbers = np.zeros(shape = N_steps, dtype = np.int64)
-    magnetisations = np.zeros(shape = N_steps, dtype = np.int64)
+    classical_energies = np.zeros(shape = N_steps, dtype = np.float64)
+    quantum_energies = np.zeros(shape = N_steps, dtype = np.float64)
+    numbers = np.zeros(shape = N_steps, dtype = np.float64)
+    magnetisations = np.zeros(shape = N_steps, dtype = np.float64)
 
     alternating_signs, ut, t, background = initialise_state_representations(state, interaction_matrix=M)
 
@@ -234,7 +229,8 @@ def quantum_cython_mcmc(N_steps = 10**4,
     if not sample_output:
         quantum_cython_mcmc_helper(
                     #outputs
-                    energies,
+                    classical_energies,
+                    quantum_energies,
                     numbers,
                     magnetisations,
 
@@ -253,10 +249,10 @@ def quantum_cython_mcmc(N_steps = 10**4,
                     beta,
                     V,
                     alpha,
-                    u,
+                    U,
                    )
 
-    return ('energies', 'numbers', 'magnetisations'), (energies, numbers, magnetisations)
+    return ('classical_energies', 'quantum_energies', 'numbers', 'magnetisations'), (classical_energies, quantum_energies, numbers, magnetisations)
 
 if __name__ == 'main':
     print('hello!')

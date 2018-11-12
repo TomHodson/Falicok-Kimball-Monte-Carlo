@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
-#PBS -N MCMC_simulation
-#PBS -lselect=1:ncpus=1:mem=1gb
+#PBS -N {name}
+#PBS -lselect=1:ncpus=1:mem=1gb:avx=true
 #PBS -lwalltime=24:00:00
 #PBS -J 1-{N_jobs}
-#PBS -m abe
-#PBS -M tch14@imperial.ac.uk
 
 echo ------------------------------------------------------
 echo -n 'Job is running on node '; cat $PBS_NODEFILE
@@ -26,4 +24,5 @@ module load intel-suite anaconda3/personal
 conda activate idp
 
 cd {working_dir}
-run_mcmc --job-id $PBS_ARRAY_INDEX --temp-dir $TMPDIR --working-dir ./
+let "JOB_ID = PBS_ARRAY_INDEX - 1"
+run_mcmc --job-id $JOB_ID --temp-dir $TMPDIR --working-dir ./

@@ -12,10 +12,9 @@ extensions = [
         include_dirs=[numpy.get_include()],
         extra_compile_args = ['-ip_no_inlining', '-xhost', '-qopenmp'],
         extra_link_args = [],
-        libraries=[],
-        library_dirs=[],
+        libraries=['mkl_intel_ilp64', 'mkl_intel_thread', 'mkl_core', 'iomp5', 'pthread', 'm', 'dl'],
+        library_dirs=["${MKLROOT}/lib/intel64"],
         ),
-
 ]
 
 setup(

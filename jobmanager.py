@@ -3,8 +3,16 @@ from pathlib import Path
 import h5py
 import click
 import time
-from montecarlo import cython_mcmc
 import logging
+
+from montecarlo import cython_mcmc
+from quantum_montecarlo import quantum_cython_mcmc
+
+
+routine_map = {
+    'cython_mcmc' : cython_mcmc,
+    'quantum_cython_mcmc' : quantum_cython_mcmc
+              }
 
 def read_config_file(working_dir):
     result_filename = working_dir / "results.hdf5"
@@ -37,9 +45,10 @@ def get_config(job_id, configs):
 
     #starting from the innermost loop work outwards
     indices = []
+    job_id_remainder = job_id
     for key in configs['loop_over'][::-1]:
         values = configs[key]
-        job_id, i  = divmod(job_id, len(values))
+        job_id_remainder, i  = divmod(job_id_remainder, len(values))
         single_config[key] = values[i]
         indices.append(i)
 
@@ -50,8 +59,7 @@ def get_config(job_id, configs):
 
     return single_config
 
-def setup_mcmc(mcmc_routine, config, working_dir = Path('./')):
-    
+def setup_mcmc(config, working_dir = Path('./'), overwrite = False):
     working_dir.mkdir(parents=True, exist_ok=True)
     (working_dir / 'jobs').mkdir(parents=True, exist_ok=True)
     (working_dir / 'logs').mkdir(parents=True, exist_ok=True)
@@ -59,28 +67,24 @@ def setup_mcmc(mcmc_routine, config, working_dir = Path('./')):
     result_filename = working_dir / "results.hdf5"
     N_jobs = total_jobs(config)
     
-    if result_filename.exists():
-        #update the results file with the remaining jobs to be done
-        with h5py.File(result_filename, "r+") as result_file:
-            result_file.attrs['jobs_to_run'] = job_completion(working_dir)
-            N_jobs = len(result_file.attrs['jobs_to_run'])
-            print('results keys:', list(result_file.keys()))
+    if result_filename.exists() and overwrite == False:
+        pass
     else:
         #create the results file and metadata from scratch
         names, vals, lens, dtypes = config_dimensions(config)
         data_shape = tuple(np.append(lens, config['N_steps']))
 
         first_config = get_config(job_id=0, configs=config)
+        mcmc_routine = routine_map[config['mcmc_routine']]
         names, results = mcmc_routine(**first_config, sample_output = True)
 
         with h5py.File(result_filename, "w") as result_file:
             result_file.attrs.update(config)
             for name, val in zip(names, results):
                 result_file.create_dataset(name, shape = data_shape, dtype = val.dtype)
-        print(list(result_file.keys()))
 
     #update or create the script because the number of jobs to do might have changed
-    script = open('./sample_runscript.sh').read().format(working_dir=working_dir.resolve(), N_jobs=N_jobs)
+    script = open('./sample_runscript.sh').read().format(working_dir=working_dir.resolve(), N_jobs=N_jobs, name = working_dir.stem)
     with open(working_dir / 'runscript.sh', 'w') as f:
         f.write(script)
         print(script)
@@ -98,11 +102,10 @@ def run_mcmc_command(*args, **kwargs):
 def run_mcmc(job_id, 
              working_dir = Path('./'),
              temp_dir = Path('./'),
-             overwrite = False, mcmc_routine = cython_mcmc):
+             overwrite = False):
     '''
     Does the work that a single thread is expected to do.
     '''
-    job_id = job_id - 1 #PBS array jobs are 1 based.
     
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
@@ -118,9 +121,9 @@ def run_mcmc(job_id,
         config = dict(f.attrs)
     logger.info(f'Loaded config')
     
-    if 'jobs_to_run' in config:
-        job_id = config['jobs_to_run'][job_id]
-        logger.info(f'Looked up job_id and it mapped to job {job_id}')
+    routine_name = config['mcmc_routine']
+    logger.info(f'Executing routine {routine_name}')
+    mcmc_routine = routine_map[routine_name]
     
     (working_dir / 'jobs').mkdir(exist_ok = True)
     job_file = working_dir / 'jobs' / f"job_{job_id}.hdf5"
@@ -132,7 +135,8 @@ def run_mcmc(job_id,
     this_config = get_config(job_id, config)
     
     logger.info(f'This jobs config is {this_config}')
-    logger.info(f'Starting MCMC routine')
+    logger.info(f'Starting MCMC routine {mcmc_routine}')
+    
     names, results = mcmc_routine(**this_config)
     runtime = time.time() - starttime
     logger.info(f'MCMC routine finished after {runtime:.2f} seconds')
@@ -153,14 +157,17 @@ def job_completion(working_dir):
     with h5py.File(result_filename, "r+") as result_file:
         config = dict(result_file.attrs)
 
-        for job_id in range(1,total_jobs(config)+1):
+        for job_id in range(total_jobs(config)):
             job_filename = job_dir / f"job_{job_id}.hdf5"
             if not job_filename.exists():
                 missing.append(job_id)
                 
         return np.array(missing)
-            
-def gather_mcmc(working_dir):
+   
+from ipywidgets import IntProgress
+from IPython.display import display
+
+def gather_mcmc(working_dir, do_all = False):
     logger = logging.getLogger(__name__)
     result_filename = working_dir / "results.hdf5"
     job_dir =  working_dir / "jobs"
@@ -172,21 +179,30 @@ def gather_mcmc(working_dir):
             logger.info(f"copied_in wasn't in config, initialising it")
             config['copied_in'] = np.zeros(total_jobs(config), dtype=np.int)
         
-        jobs_to_copy = np.where(config['copied_in'] == 0)[0]
+        if do_all: jobs_to_copy = np.arange(total_jobs(config))
+        else: jobs_to_copy = np.where(config['copied_in'] == 0)[0]
         
-        logger.info(f'Config: {dict(config)}')
+        logger.debug(f'Config: {dict(config)}')
         logger.info(f'Number of Jobs to copy in: {len(jobs_to_copy)}')
         logger.info(f'Job IDs: {jobs_to_copy}...')
         
+        #bar = IntProgress(max=len(jobs_to_copy),description='Progress:')
+        #display(bar)
         for job_id in jobs_to_copy:
-            logger.info(f'Starting Job ID: {job_id}')
+            #bar.value += 1
             job_filename = job_dir / f"job_{job_id}.hdf5"
             if not job_filename.exists():
-                logger.info(f"Job ID {job_id} results file doesn't exist")
+                logger.debug(f"Job ID {job_id} results file doesn't exist")
                 missing += 1
                 continue
             
+            logger.debug(f'Starting Job ID: {job_id}')
+            
             with h5py.File(job_filename, 'r') as job_file:
+                if 'runtime' not in job_file.attrs:
+                    logger.logging(f"job {job_id} file doesn't have the runtime key in its attrs")
+                    return
+                
                 #loop over the datasets, ie energy, magnetisation etc
                 for dataset_name, val in job_file.items():
                     dataset = result_file[dataset_name]
@@ -200,8 +216,11 @@ def gather_mcmc(working_dir):
                     dataset[indices] = val
                 
                 #indicate that this data has been copied into the result file sucessfully
-                config['copied_in'][job_id-1] = 1
-                result_file.flush()
+                #by putting a 1 in the right place
+                #have to be careful because hdf5py attribute variables cannot be modified by slicing
+                mask = np.arange(len(config['copied_in'])) == job_id
+                config['copied_in'] = np.logical_or(config['copied_in'], mask)
                 
         logger.info(f'missing : {missing} of {len(jobs_to_copy)} total jobs that need to be inserted (overall {total_jobs(config)})')
-        logger.info(f'File size: {result_filename.stat().st_size / 10**9}')
+        logger.info(f'File size: {result_filename.stat().st_size / 10**9:.2f}Gb')
+        logger.debug(f'Config: {dict(result_file.attrs)}')
